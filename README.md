@@ -13,17 +13,16 @@ Current focus: Rust backend security.
 
 ## Install
 
-Direct install from raw GitHub:
+Full install from GitHub, including `references/` and `templates/`:
 
 ```bash
-hermes skills install https://raw.githubusercontent.com/ctresb/hermes-security-auditor/main/rust-security-auditor/SKILL.md
+hermes skills install ctresb/hermes-security-auditor/rust-security-auditor
 ```
 
-Or add the repository as a tap, then install from it:
+Optional: add this repo as a tap for discovery:
 
 ```bash
-hermes skills tap add https://github.com/ctresb/hermes-security-auditor
-hermes skills install rust-security-auditor
+hermes skills tap add ctresb/hermes-security-auditor
 ```
 
 ## Use

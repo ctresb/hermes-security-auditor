@@ -14,9 +14,8 @@ This file is a governance template for Rust backend audits. Replace placeholders
 
 | Variable | Required | Example generation | Notes |
 |---|---:|---|---|
-| `DATABASE_URL` | yes | `printf 'postgres://USER:REDACTED@HOST:5432/DB?sslmode=verify-full
-'` | Never commit. Use strong generated password. |
-| `APP_SECRET_KEY` | yes | `openssl rand -base64 48` | Must decode to at least 32 random bytes. Rename to the project's real env var. |
+| `DATABASE_URL` | yes | `postgres://USER:***@HOST:5432/DB?sslmode=verify-full` | Never commit. Use strong generated password. |
+| `AUTH_SIGNING_KEY` | yes | cryptographic random bytes | Must be at least 32 random bytes. Rename to the project's real configuration name. |
 
 Do not use examples like `password`, `secret`, `changeme`, `admin`, `postgres`, or `localhost` for deploy unless explicitly marked local-only and blocked from production.
 
