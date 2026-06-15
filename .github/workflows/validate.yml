@@ -1,10 +1,9 @@
 name: validate
 
+# Push/PR CI is disabled because GitHub Actions is currently blocked by account billing.
+# Run locally with: python scripts/validate_skills.py
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   skills:
