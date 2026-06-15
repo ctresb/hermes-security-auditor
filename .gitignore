@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# Local env and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Generated outputs
+audit_*/
+*.log
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
