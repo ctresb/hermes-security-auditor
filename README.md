@@ -10,6 +10,9 @@
   <a href="https://skills.sh/ctresb/hermes-security-auditor/rust-security-auditor"><img src="https://img.shields.io/badge/skills.sh-rust--security--auditor-black?style=for-the-badge" alt="skills.sh listing"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License: MIT"></a>
 </p>
+<p align="center">
+  <a href="https://feitonobrasil.dev.br"><img src="https://selo.feitonobrasil.dev.br/pt-br/branco/1x.svg" alt="Feito no Brasil" height="56"></a>
+</p>
 
 Adversarial security-audit skills for [Hermes Agent](https://github.com/NousResearch/hermes-agent). The current package is a Rust backend auditor that helps Hermes review real code paths, attack chains, database behavior, deployment defaults, and AI/LLM risk without turning the audit into a generic checklist.
 
