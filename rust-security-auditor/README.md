@@ -2,6 +2,26 @@
 
 Hermes Agent skill for deep adversarial audits of Rust backend services.
 
+## Install
+
+Install the full skill directory, including `references/` and `templates/`:
+
+```bash
+hermes skills install ctresb/hermes-security-auditor/rust-security-auditor
+```
+
+Use the skill from a fresh Hermes session:
+
+```bash
+hermes -s rust-security-auditor
+```
+
+Or load it inside an existing Hermes conversation:
+
+```text
+/rust-security-auditor
+```
+
 ## Scope
 
 - Axum, Actix Web, Rocket, Warp, Hyper, Tower
@@ -11,11 +31,17 @@ Hermes Agent skill for deep adversarial audits of Rust backend services.
 - Supply chain, cargo-audit, cargo-deny, build scripts
 - AI/LLM features, RAG, tool calls, prompt injection, memory poisoning
 
-## Install
+## Output
 
-```bash
-hermes skills install https://raw.githubusercontent.com/ctresb/hermes-security-auditor/main/rust-security-auditor/SKILL.md
-```
+A serious audit should include:
+
+- attack surface map;
+- ranked findings;
+- affected code paths;
+- attacker chain;
+- remediation;
+- verification steps;
+- dependency, database, auth, crypto, deployment, and AI/LLM review sections.
 
 ## Files
 
