@@ -49,7 +49,7 @@ Audit this Rust backend with rust-security-auditor. Create a timestamped audit d
 
 | Auditor | Status | Scope |
 |---|---|---|
-| [`rust-security-auditor`](./rust-security-auditor/SKILL.md) | active | Rust web backends, async runtimes, PostgreSQL, OAuth/OIDC, sessions, RLS, migrations, supply chain, crypto, deployment defaults, AI/LLM risks |
+| [`rust-security-auditor`](./rust-security-auditor/SKILL.md) | active | Rust web backends, async runtimes, PostgreSQL, OAuth/OIDC, sessions, RLS, migrations, supply chain, crypto, deployment defaults, CI/CD, containers/Kubernetes/IaC, GraphQL/gRPC, queues/caches, domain/DNS/email, and AI/LLM/MCP/RAG risks |
 | `go-security-auditor` | planned | Go backend security audits |
 
 ---
@@ -62,7 +62,9 @@ Audit this Rust backend with rust-security-auditor. Create a timestamped audit d
 <tr><td><b>Audits Rust-specific failure modes</b></td><td>Unsafe boundaries, panic-driven DoS, blocking work inside async runtimes, dependency risk, warning suppression, dead code, and AI-generated cruft.</td></tr>
 <tr><td><b>Goes deep on PostgreSQL</b></td><td>SQL injection beyond simple value binding, transaction races, RLS gaps, migrations, pool exhaustion, privilege boundaries, TLS, and version or identifier policy drift.</td></tr>
 <tr><td><b>Reviews web and identity controls</b></td><td>OAuth/OIDC, JWTs, sessions, cookies, CSRF, CORS, SSRF, webhooks, uploads, path handling, command execution, logs, and middleware order.</td></tr>
-<tr><td><b>Covers AI/LLM features</b></td><td>Prompt injection, RAG poisoning, tool-call abuse, memory poisoning, unsafe output handling, excessive agency, and stored-data exfiltration paths.</td></tr>
+<tr><td><b>Covers AI/LLM/agent features</b></td><td>Prompt injection, RAG/vector and memory poisoning, MCP and tool-call abuse, excessive agency, unsafe output handling, GenAI telemetry/evals, and stored-data exfiltration paths.</td></tr>
+<tr><td><b>Detects surfaces and loads focused packs</b></td><td>CI/CD and software supply chain, containers/Kubernetes/IaC, caches/queues, GraphQL/gRPC, domain/DNS/email, and Rust unsafe/fuzzing each trigger a dedicated reference pack only when present.</td></tr>
+<tr><td><b>Maps to external standards</b></td><td>Builds a coverage matrix against OWASP (ASVS, API Top 10, LLM Top 10), CWE, NIST SSDF/800-61, SLSA, and Kubernetes PSS, and reports unreviewed areas as negative-space findings.</td></tr>
 <tr><td><b>Requires evidence</b></td><td>Findings must include affected code paths, attacker chain, impact, remediation, and a concrete way to verify the fix.</td></tr>
 </table>
 
@@ -79,7 +81,8 @@ The auditor is meant to produce a serious report, not quick comments. A complete
 - remediation steps;
 - verification commands or tests;
 - positive security notes where useful;
-- dependency, database, auth, crypto, deployment, and AI/LLM review sections;
+- a coverage matrix mapping reviewed areas to external standards, with unreviewed areas marked as gaps;
+- dependency/CI-CD, database, auth, crypto, web/middleware, cloud-container-IaC, cache/queue/GraphQL/gRPC, domain/email, AI/LLM, and detection/IR review sections (those tied to a surface only when present);
 - remediation roadmap split into fix now, fix next, and monitor.
 
 By default the skill asks Hermes to create a timestamped audit directory in the target backend, for example:
@@ -104,15 +107,24 @@ hermes-security-auditor/
     README.md
     SKILL.md
     references/
-      ai-agent-audit-failure-patterns.md
+      appsec-framework-coverage.md
+      rust-unsafe-fuzzing-tooling.md
+      supply-chain-ci-cd-security.md
+      cloud-container-iac-security.md
+      cache-queues-graphql-grpc-security.md
+      ai-agent-mcp-rag-security.md
+      detection-privacy-incident-response.md
+      domain-email-security.md
       oauth-oidc-session-identity-audit.md
       postgres-deep-and-pooling-audit.md
-      rust-backend-audit-patterns.md
       web-crypto-hardening-rust.md
+      rust-backend-audit-patterns.md
+      ai-agent-audit-failure-patterns.md
     templates/
       DEPLOYMENT_GUIDELINES.md
   scripts/
     validate_skills.py
+    check_public_skill.py
 ```
 
 ---
@@ -130,10 +142,11 @@ hermes-security-auditor/
 
 ## Validate changes
 
-Run the local validator before opening a PR:
+Run the local validators before opening a PR:
 
 ```bash
-python scripts/validate_skills.py
+python scripts/validate_skills.py      # generic: frontmatter, size, links, referenced files
+python scripts/check_public_skill.py   # public-safety: no private terms, required sections present
 ```
 
 For install packaging, test the full GitHub identifier form in an isolated Hermes home:

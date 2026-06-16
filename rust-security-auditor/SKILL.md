@@ -1,12 +1,12 @@
 ---
 name: rust-security-auditor
-description: Use when auditing Rust backend code (Axum/Actix/Rocket/Tower) with PostgreSQL or similar relational stores; async runtimes, SQLx/Diesel/SeaORM, OAuth2/OIDC, sessions, multi-tenant/RLS, connection pooling, migrations, crypto/secrets, dependency supply chain, unsafe boundaries, and AI/LLM features. Produces an adversarial security/performance audit with ranked exploit chains, dynamic verification, and a detailed markdown report.
-version: 1.0.0
+description: Use when auditing Rust backend code (Axum/Actix/Rocket/Tower) with PostgreSQL or similar relational stores; async runtimes, SQLx/Diesel/SeaORM, OAuth/OIDC, sessions, multi-tenant/RLS, connection pooling, migrations, crypto/secrets, dependency supply chain, unsafe boundaries, CI/CD, containers/IaC, GraphQL/gRPC, queues/caches, and AI/LLM/MCP/RAG features. Detects repository surfaces, loads focused reference packs, maps findings to external standards, and produces an adversarial markdown security report with ranked exploit chains and verification steps.
+version: 1.1.0
 author: Hermes Agent + contributors
 license: MIT
 metadata:
   hermes:
-    tags: [rust, backend, security, audit, postgresql, ai-security, threat-modeling, performance]
+    tags: [rust, backend, security, audit, postgresql, ai-security, mcp, supply-chain, ci-cd, kubernetes, cloud, graphql, grpc, threat-modeling, performance]
     related_skills: [systematic-debugging, requesting-code-review, test-driven-development, codebase-inspection]
 ---
 
@@ -48,17 +48,17 @@ Do not use for:
 7. **Assume AI-authored code hides laziness.** AI coding agents often silence warnings, leave dead code, duplicate utilities, invent docs, skip deployment rigor, stop after partial verification, and forget earlier constraints. Audit for those artifacts directly.
 8. **Treat deployment as code.** Unsafe defaults in `.env.example`, Compose files, Dockerfiles, scripts, README snippets, or deployment docs are findings even if labeled "dev". Development credentials must be strong and explicit, not toy passwords.
 
-## Project-Specific Policy Checks
+## Project-Specific Policy Discovery
 
-Before treating any convention as mandatory, read the repository's own docs, config, migrations, and deployment files. Audit against the project's stated policy, not against one contributor's private defaults.
+Before treating any convention as mandatory, read the repository's docs, config, migrations, and deployment files. Audit against the project's declared policy, not against private defaults. A specific pinned database major or a specific identifier scheme can be a valid project policy, but none is assumed here; discover what the project actually uses and audit against that.
 
 Common policy checks:
 
 - **Identifier policy:** identify whether the project uses UUIDv4, UUIDv7, UUIDv8, ULID, Snowflake-style IDs, integer IDs, or another scheme. Flag mixed or undocumented schemes when they create authorization, enumeration, migration, or compatibility risk.
 - **Database version policy:** identify the project's pinned PostgreSQL version or managed database target. Flag `postgres:latest`, unpinned database images, vague docs, and code that silently relies on a different version than deployment.
 - **Environment security:** every environment, including local/dev/test, should avoid deployable weak secrets. Weak sample passwords such as `password`, `secret`, `changeme`, `admin`, `postgres`, or `123456` are findings unless clearly local-only and blocked from production.
-- **Deployment determinism:** deployment docs should be exact enough for a new maintainer or automated agent to follow safely: explicit commands, rollback path, health checks, required env vars, and fail-closed behavior.
-- **Operator model:** assume future human or automated operators may not remember chat context. Encode critical instructions in repository files, exact commands, checklists, and audit artifacts.
+- **Deployment determinism:** deployment docs should be exact enough for a new maintainer or automation to follow safely: explicit commands, rollback path, health checks, required env vars, and fail-closed behavior.
+- **Operator model:** assume future human maintainers or automated agents may not retain chat context. Encode critical instructions in repository files, exact commands, checklists, and audit artifacts.
 
 ## Required First Pass
 
@@ -110,6 +110,67 @@ Static-only review systematically misses runtime bugs: migrations that fail to a
 ### Adversarial find -> refute pass
 
 Do not ship a finding on first impression. For each candidate, run a deliberate refutation pass: read the actual code path end-to-end and try to prove it is NOT exploitable given the real guards (PKCE, client_secret, fixed redirect_uri, RLS, unique constraints, type bounds). Downgrade or drop what survives refutation; keep what doesn't, with the precondition that gates it stated explicitly. Separate "real and exploitable today" from "real but defense-in-depth" - label both honestly rather than inflating severity.
+
+## Surface-Triggered Modules
+
+This skill is a router, not a fixed checklist. After the first repository map, detect which optional surfaces are present and activate the matching review module. Do not run a module for a surface that does not exist; do record (in the Coverage Matrix) any surface that is present but could not be fully reviewed.
+
+| Detected in repo | Activate module | Reference pack |
+|---|---|---|
+| `.github/workflows/`, GitLab/Circle CI config, release scripts | CI/CD & software supply chain | `references/supply-chain-ci-cd-security.md` |
+| `Dockerfile`, `docker-compose*.yml`, Kubernetes/Helm manifests, Terraform/Pulumi/CloudFormation | Cloud / container / Kubernetes / IaC | `references/cloud-container-iac-security.md` |
+| Redis/CDN/reverse-proxy use, cache headers (`Cache-Control`/`Vary`), `deadpool-redis`/`fred` | Cache & cache-poisoning | `references/cache-queues-graphql-grpc-security.md` |
+| Queues/streams/background workers/event consumers (`lapin`/`rdkafka`/SQS) | Event-driven / idempotency / replay | `references/cache-queues-graphql-grpc-security.md` |
+| GraphQL schema/handlers (`async-graphql`/`juniper`) | GraphQL | `references/cache-queues-graphql-grpc-security.md` |
+| gRPC / protobuf / `tonic` services | gRPC | `references/cache-queues-graphql-grpc-security.md` |
+| LLMs, agents, MCP, tools, RAG, embeddings, vector stores, memory | Agentic AI runtime security | `references/ai-agent-mcp-rag-security.md` |
+| `unsafe`/FFI/custom parsers/binary formats/crypto wrappers | Rust hard mode (unsafe/fuzz/Miri) | `references/rust-unsafe-fuzzing-tooling.md` |
+| Email send / reset / magic link / invite, DNS/domain config, SPF/DKIM/DMARC, custom domains, CDN | Domain, DNS & email security | `references/domain-email-security.md` |
+
+The always-on core (Rust vuln classes, PostgreSQL, auth/OAuth/identity, web/middleware/CORS, crypto/secrets, dependency supply chain, deployment) runs regardless of surface detection.
+
+### Reference-loading and coverage rules (not optional)
+
+1. If a surface is present, LOAD its reference pack (read the file) BEFORE writing findings for that surface. Do not audit a detected surface from memory when a pack exists for it.
+2. If a surface is present but you could not fully review it (no time, no access, generated config, missing tool), it MUST appear as a Coverage Matrix gap (Reviewed? = Partial/No) with a one-line why. Present-but-skipped is never silent.
+3. If a surface is absent, mark its Coverage Matrix row Reviewed? = N/A with the reason. Do NOT delete the row - a missing row reads as "forgotten", an N/A row reads as "considered, not applicable".
+4. Do not force irrelevant OWASP/CWE/CAPEC/NIST mappings onto a finding. A wrong mapping is worse than none. Pick the most specific weakness that actually fits.
+5. If an identifier is uncertain (CWE number, CAPEC id, ASVS V-number, OWASP API/LLM item, NIST SP number, K8s field), verify it from source (WebSearch/WebFetch) or cite the framework by name without inventing an ID. Never guess an ID.
+
+## Required External Coverage Pass
+
+Before finalizing the audit, map reviewed surfaces and findings against external standards where applicable, and load `references/appsec-framework-coverage.md` for the mapping rules and the Coverage Matrix template:
+
+- OWASP ASVS 5.0; OWASP API Security Top 10 2023; OWASP Web Security Testing Guide (WSTG).
+- CWE Top 25; CAPEC attack patterns.
+- MITRE ATT&CK - only when infra/cloud/identity/credential abuse applies.
+- NIST SSDF (SP 800-218); SLSA - for supply chain. OWASP Top 10 CI/CD Security Risks - for pipelines.
+- OWASP Top 10 for LLM Applications 2025; MITRE ATLAS - only for AI systems.
+- Kubernetes Pod Security Standards; NIST SP 800-190 - only for containers/Kubernetes.
+- OWASP Logging Cheat Sheet; NIST SP 800-61r3; NIST Privacy Framework - for detection/IR/privacy.
+
+Every serious finding should carry, where applicable: a CWE id, an OWASP/ASVS or Top-10 mapping, a CAPEC/attack-pattern when useful, the affected asset, exploit preconditions, the attacker chain, and a verification test/command. Do **not** force irrelevant mappings. **Do** explicitly state when a relevant area was not reviewed - that is a negative-space finding, not a silent omission.
+
+## Negative-Space Findings
+
+Missing controls are findings when they are relevant to the system. Treat absence as a ranked finding (with severity), not a footnote:
+
+- No negative/authorization tests (user A cannot reach user B's object; non-admin cannot set admin fields).
+- No audit log for auth events, admin actions, or destructive operations.
+- No timeout on outbound HTTP; no statement timeout / pool timeout.
+- No rate limit or budget on costly/abusable operations (login, search, export, email/SMS, embeddings, LLM calls).
+- No CI/CD permission hardening; no SBOM or provenance for release artifacts.
+- No account deletion / data export / erasure path; no provider unlink; no session self-revoke.
+- No incident-response runbook; no tested backup/restore; no reaper for expired tokens/sessions.
+- No RAG poisoning tests; no tool permission model; no spend/loop limits for LLM/agent calls.
+
+## Fuzz, Miri, and Sanitizer Gate
+
+If the repository contains custom parsing, `unsafe` Rust, FFI, binary formats, compression/image processing, crypto wrappers, auth-token parsing, or complex deserialization, require fuzzing, Miri, sanitizer, or Loom evidence where feasible - see `references/rust-unsafe-fuzzing-tooling.md` for harness setup and commands.
+
+- Pick the smallest useful harness per surface: `cargo fuzz` for parsers/payloads/deserialization; `cargo +nightly miri test` around unsafe abstractions; `-Zsanitizer=address|thread` for FFI/native; `loom` for custom concurrency.
+- If these tools cannot be run in the environment, record the blocker explicitly and recommend the exact harness to add.
+- Any crasher and its minimized input must become a committed regression test.
 
 ## Rust-Specific Vulnerability Classes
 
@@ -432,7 +493,7 @@ OAuth 2.0 / OIDC (RFC 6749/6750/7636/9700/9207, OIDC Core, RFC 8725):
 
 JWT-as-session (if used): reject `alg:none`; pin alg/key type (RS256->HS256 public-key-as-HMAC confusion); allowlist `kid` (path/SQLi injection); ignore embedded `jwk`/`jku`/`x5u`; remember JWTs can't be revoked without a denylist (flag "logout/ban doesn't invalidate live JWTs").
 
-Sessions (opaque): ≥256-bit OS-CSPRNG token, only its hash stored; expiry/revocation evaluated in SQL against `now()`; rotation at privilege boundaries; idle + absolute TTL (flag 30-day absolute with no rotation); `revoke_all_for_user`/"log out everywhere" actually wired to ban, not dead code; bearer not delivered in URL query/history (fragment-then-strip, or one-time exchange-code POSTed back).
+Sessions (opaque): >=256-bit OS-CSPRNG token, only its hash stored; expiry/revocation evaluated in SQL against `now()`; rotation at privilege boundaries; idle + absolute TTL (flag 30-day absolute with no rotation); `revoke_all_for_user`/"log out everywhere" actually wired to ban, not dead code; bearer not delivered in URL query/history (fragment-then-strip, or one-time exchange-code POSTed back).
 
 **Ban/disable is an auth boundary, not a feature**: `verify()` must reject banned/disabled/suspended accounts on **every request**, not just at login - else a banned (or migrated-banned) user re-runs OAuth for a fresh session.
 
@@ -534,7 +595,7 @@ Layer ordering and scope are security-relevant. Deep playbook in `references/web
 Deep playbook in `references/web-crypto-hardening-rust.md`. Red flags:
 
 - `==` on MACs/signatures/tokens/hashes (timing oracle) instead of `subtle::ConstantTimeEq` or the MAC's `verify_slice`.
-- **Key length measured as characters, not entropy** (a 32-char passphrase is not 256 bits; require base64/hex of ≥32 random bytes and validate decoded length).
+- **Key length measured as characters, not entropy** (a 32-char passphrase is not 256 bits; require base64/hex of >=32 random bytes and validate decoded length).
 - Single signing key, no `kid`, no dual-key verify window -> rotation breaks in-flight tokens and is avoided.
 - AEAD nonce reuse (`aes-gcm`); secrets from non-CSPRNG (`thread_rng`/seeded) instead of `getrandom`/`OsRng`; secrets in `Debug`/`Display`/panic messages (verify redacted impls); no `zeroize` for key material; native-tls/OpenSSL instead of rustls; remote DB without `sslmode=verify-full`.
 
@@ -548,13 +609,27 @@ Deep playbook in `references/web-crypto-hardening-rust.md`. Red flags:
 ### Data Lifecycle, Audit Logging, and Compliance
 
 - No append-only security audit trail (auth events, admin/destructive actions) -> incidents are unreconstructable. Absence is a finding for products that ban users, link accounts, or handle money.
-- No account deletion / data export / right-to-erasure path; no unlink-provider (must keep ≥1 login method); no session-list/self-revoke UI; destructive `DELETE /account` with no re-auth/confirmation/audit event.
+- No account deletion / data export / right-to-erasure path; no unlink-provider (must keep >=1 login method); no session-list/self-revoke UI; destructive `DELETE /account` with no re-auth/confirmation/audit event.
 - No reaper for expired/revoked sessions, exchange codes, or stale tokens (unbounded growth + larger leak window). PII retention/minimization not addressed.
 
 ### Rate Limiting at Scale and Denial-of-Wallet
 
-- In-memory per-instance limiter bypassed by horizontal scaling (N replicas -> N× limit) and lost on restart; for real limits use a shared store (Redis) or edge enforcement - note the limitation explicitly when only in-memory exists. Key on trusted client identity (socket peer, or `X-Forwarded-For` only behind a configured trusted proxy); bound/TTL-evict the key map.
+- In-memory per-instance limiter bypassed by horizontal scaling (N replicas -> Nx limit) and lost on restart; for real limits use a shared store (Redis) or edge enforcement - note the limitation explicitly when only in-memory exists. Key on trusted client identity (socket peer, or `X-Forwarded-For` only behind a configured trusted proxy); bound/TTL-evict the key map.
 - Stricter budgets on expensive/abusable endpoints (login, OAuth callback, token exchange, reset, search, export, email/SMS send). Any user-triggerable costly external action (email/SMS/push/S3/CDN/embeddings) is a cost-abuse vector needing per-user budgets and confirmation for high-cost/irreversible actions.
+
+## Business Logic Abuse Review
+
+Some of the most damaging bugs are valid API calls used in harmful sequences - they do not look like injection, memory corruption, or broken crypto. Review the business flows, not just the endpoints. Maps to OWASP API6:2023 (Unrestricted Access to Sensitive Business Flows). Ask:
+
+1. **What can a normal user do too many times?** Account/workspace/project/upload/invite/message creation at unlimited scale; resource creation without per-tenant quotas.
+2. **What can be replayed?** Purchase, subscription, coupon, invitation, verification, or webhook flows without idempotency keys or replay protection.
+3. **What workflow state can be skipped?** Approval, finalization, moderation, or payment states bypassed by calling a later-stage endpoint directly.
+4. **What paid external action can be triggered cheaply?** Emails, SMS, push, embeddings, LLM calls, webhooks fired repeatedly (denial-of-wallet).
+5. **What operation creates irreversible or expensive side effects?** Exports, searches, image/video processing, compression, model calls with no quota/confirmation.
+6. **What hidden admin-like route exists outside the normal UI?** Endpoints reachable directly that the UI never exposes.
+7. **What broad `PATCH`/`PUT` body can change protected state?** Mass-assignment of `role`/`owner_id`/`tenant_id`/`status`/`balance` through a permissive update DTO (ties to mass-assignment in the input section).
+
+Required controls: rate limits keyed on user / tenant / IP / API key / business object as appropriate; idempotency keys for replayable flows; server-side state-machine enforcement (a later stage verifies the prior stage actually completed); confirmation + quotas + monitoring on high-cost or irreversible operations.
 
 ## AI/LLM Feature Audit for Rust Backends
 
@@ -584,9 +659,9 @@ High-risk AI artifacts:
 - Scope drift: extra features, permissive defaults, weak dev envs, convenience shortcuts, or broad abstractions not requested.
 - Long-context loss: documented project invariants missing in new files. Verify identifier policy, database version policy, strong envs, deterministic deployment docs, and timestamped audit output.
 
-AI-operator stance:
+Operator stance:
 
-- Assume future AI coding agents may operate this repository later.
+- Assume future human maintainers or automated coding agents may operate this repository, and may not retain prior context.
 - Do not rely on model memory, vibes, or an operator noticing ambiguity.
 - Encode critical instructions in repository files, exact commands, checklists, and audit artifacts.
 - Make findings and deployment steps impossible to misread: exact paths, exact env names, exact commands, exact pass/fail criteria.
@@ -648,6 +723,15 @@ For each issue ask:
 
 The final report must be English markdown and include these sections.
 
+### Report Quality Gates (enforced)
+
+These are hard gates, not suggestions:
+
+- Every finding rated **Medium or above** MUST include all of: affected code path (`file.rs:line`), affected asset (route/RPC/handler/table), exploit preconditions (who/what is needed), attacker chain (step sequence to impact), severity, confidence, CWE and OWASP/ASVS mapping where applicable, remediation, and verification (test/command/manual check). A finding missing any of these is not finishable - complete it or drop it.
+- Every **Critical/High** finding MUST pass an explicit refutation pass: try to prove it is NOT exploitable given the real guards (PKCE, client_secret, fixed redirect_uri, RLS, unique constraints, type bounds) BEFORE keeping it. Record the precondition that gates it. Label "real and exploitable today" vs "real but defense-in-depth" honestly.
+- Do NOT claim a command, test, migration, or dynamic check passed unless it actually ran. If a tool/test was blocked (not installed, no DB, no network), record the exact blocker and what it would have verified. Never imply success you did not observe.
+- Identifiers (CWE/CAPEC/ASVS/OWASP/NIST/K8s) must be verified from source or cited by framework name without a number - never invented.
+
 ```markdown
 # Rust Backend Security Audit Report
 
@@ -683,6 +767,29 @@ Output path: `audit_DD-MM-AAAA-HH-MM/RUST_BACKEND_SECURITY_AUDIT.md`
 ### External Integrations
 | Integration | Direction | Risk |
 |---|---|---|
+
+## Coverage Matrix
+
+Map reviewed areas to external standards. Mark surfaces not present as N/A (keep the row); mark present-but-unreviewed as a gap (negative-space finding). See `references/appsec-framework-coverage.md`.
+
+| Area | Framework / refs | Reviewed? | Gaps | Notes |
+|---|---|---:|---|---|
+| API object authorization (BOLA/IDOR) | OWASP API1:2023, CWE-639/-862, ASVS | yes/no/partial/N/A | ... | ... |
+| Object property auth / mass-assignment | OWASP API3:2023, CWE-915 | yes/no/partial/N/A | ... | ... |
+| Authentication / session / identity | ASVS, OWASP API2:2023, CWE-287 | yes/no/partial/N/A | ... | ... |
+| Business-flow abuse | OWASP API6:2023 | yes/no/partial/N/A | ... | ... |
+| Resource consumption / DoS | OWASP API4:2023, CWE-400 | yes/no/partial/N/A | ... | ... |
+| Unsafe Rust / FFI / fuzz / Miri / sanitizers / Loom | Rustonomicon, CWE-119/-787; `rust-unsafe-fuzzing-tooling.md` | yes/no/partial/N/A | ... | ... |
+| Supply chain (crates) | NIST SSDF, SLSA, CWE-1357 | yes/no/partial/N/A | ... | ... |
+| CI/CD pipeline | OWASP CICD-SEC Top 10; `supply-chain-ci-cd-security.md` | yes/no/partial/N/A | ... | ... |
+| Containers / Kubernetes / IaC | NIST SP 800-190, K8s PSS; `cloud-container-iac-security.md` | yes/no/partial/N/A | ... | ... |
+| Web cache / CDN | CWE-524/-525; `cache-queues-graphql-grpc-security.md` | yes/no/partial/N/A | ... | ... |
+| Queue / event replay / idempotency | CWE-20/-770; `cache-queues-graphql-grpc-security.md` | yes/no/partial/N/A | ... | ... |
+| GraphQL / gRPC | OWASP GraphQL CS, CWE-770; `cache-queues-graphql-grpc-security.md` | yes/no/partial/N/A | ... | ... |
+| Domain / Email / DNS / custom domains | SPF/DKIM/DMARC, CWE-290, takeover; `domain-email-security.md` | yes/no/partial/N/A | ... | ... |
+| AI runtime: tools / agents / MCP | OWASP LLM06:2025, MCP Security; `ai-agent-mcp-rag-security.md` | yes/no/partial/N/A | ... | ... |
+| RAG / vector / memory | OWASP LLM08:2025, MITRE ATLAS | yes/no/partial/N/A | ... | ... |
+| Detection / IR / privacy / data lifecycle | OWASP A09:2021, NIST 800-61r3, NIST Privacy; `detection-privacy-incident-response.md` | yes/no/partial/N/A | ... | ... |
 
 ## Findings
 
@@ -744,11 +851,14 @@ Concrete fix, preferably with Rust/SQL examples.
 - Hallucinated docs or impossible commands
 - Premature completion / missing verification
 
-## Dependency and Supply Chain Review
+## Dependency, Supply Chain & CI/CD Review
 
 - RustSec/cargo-audit results
-- cargo-deny/cargo tree notes
-- Risky crates/features/build scripts
+- cargo-deny/cargo tree notes; cargo-vet/cargo-geiger state if configured
+- Risky crates/features/build scripts and proc macros
+- CI/CD (if `.github/workflows/` etc. present): `permissions:` minimization, `pull_request_target` exposure, action pinning, secret exposure to fork PRs, OIDC vs static creds
+- SBOM / provenance / artifact signing for release artifacts; dependency-confusion exposure
+- See `references/supply-chain-ci-cd-security.md` and `references/rust-unsafe-fuzzing-tooling.md`
 
 ## Authentication, OAuth/OIDC & Identity Review
 
@@ -782,15 +892,46 @@ Concrete fix, preferably with Rust/SQL examples.
 - Inbound webhook signature verification (raw body, constant-time, replay)
 - Deserialization/resource-allocation limits; rate-limiting at scale
 
-## Data Lifecycle & Compliance Review
+## Cloud, Container & IaC Review (if present)
 
-- Account deletion / export / erasure; provider unlink; session self-revoke
-- Expired-token/session/exchange-code reaper; PII retention
+- Dockerfile/compose: non-root, pinned base, dropped caps, no baked secrets
+- Kubernetes Pod Security Standards (privileged/hostNetwork/hostPath/RBAC/securityContext)
+- IaC: public exposure, wildcard IAM, unencrypted stores, KMS rotation/policy; IMDSv2
+- See `references/cloud-container-iac-security.md`
+
+## Cache, Queue, GraphQL & gRPC Review (if present)
+
+- Cache: authed/tenant-cacheability, unkeyed inputs, poisoning/deception; Redis exposure/ACL/TLS/key-injection
+- Queues: schema/size validation, idempotency, replay, retries/DLQ, least-privilege
+- GraphQL: depth/cost limits, introspection, resolver/field authz, batching abuse
+- gRPC: TLS/mTLS, per-RPC authz, deadlines, max message size, reflection
+- See `references/cache-queues-graphql-grpc-security.md`
+
+## Business Logic Abuse Review
+
+- Unlimited creation / replay / workflow-state skipping / denial-of-wallet / mass-assignment
+- Rate limits keyed to user/tenant/IP/key/object; idempotency; state-machine enforcement (OWASP API6:2023)
+
+## Domain, DNS & Email Review (if present)
+
+- SPF/DKIM/DMARC posture; subdomain/dangling/custom-domain takeover; CDN origin leakage
+- Host/forwarded-header link integrity; reset/magic-link/invite rate limits + enumeration; inbound mail parsing
+- See `references/domain-email-security.md`
 
 ## AI/LLM Review
 
-- Prompt injection/RAG/tool/memory risks if applicable
-- Deterministic server-side controls
+- Prompt injection (direct/indirect)/RAG/tool/memory risks if applicable
+- Deterministic server-side controls; tool permission model; spend/loop limits; evals
+- MCP consent/allowlists/per-tool auth; framework mapping (OWASP LLM Top 10 2025)
+- See `references/ai-agent-mcp-rag-security.md`
+
+## Detection, Logging, Incident Response & Privacy Review
+
+- Security audit-event coverage; log redaction & log-injection safety
+- Detection/alerting on brute force, IDOR/BOLA, SSRF blocks, token/cost spikes, cross-tenant retrieval
+- Incident response: runbooks, tested backups, RTO/RPO, credential rotation
+- Privacy/lifecycle: account deletion / export / erasure; provider unlink; session self-revoke; reaper; PII retention
+- See `references/detection-privacy-incident-response.md`
 
 ## Performance-Driven Security Risks
 
@@ -834,7 +975,20 @@ cargo tree -d
 cargo audit
 cargo deny check
 cargo vet                 # if configured: third-party crate review state
+cargo geiger              # if installed: unsafe-usage surface across deps
 # cargo auditable build   # embed an SBOM in the binary for later scanning
+# cargo cyclonedx         # generate a CycloneDX SBOM for release artifacts
+
+# Rust hard mode (when unsafe/FFI/parsers/crypto present)
+cargo +nightly miri test            # UB/OOB/UAF around unsafe abstractions (no FFI)
+cargo fuzz list                     # list fuzz targets, then run one (substitute TARGET_NAME):
+cargo fuzz run TARGET_NAME          # parsers/payloads/deserialization
+# RUSTFLAGS="-Zsanitizer=address" cargo +nightly test --target x86_64-unknown-linux-gnu  # FFI/native; also thread|memory|leak
+
+# Surface detection (route to the matching module + reference pack)
+ls .github/workflows/ 2>/dev/null && echo "=> supply-chain-ci-cd"
+ls Dockerfile docker-compose*.yml 2>/dev/null; find . -name '*.tf' -o -name 'Chart.yaml' -o -name 'deployment.yaml' 2>/dev/null | head   # => cloud-container-iac
+grep -rEl 'tonic|async-graphql|juniper|lapin|rdkafka|deadpool-redis|fred|mcp|embedding|pgvector|qdrant' --include='*.toml' --include='*.rs' . | head   # => cache/queue/graphql/grpc or AI runtime
 
 # Build and tests
 cargo fmt --all -- --check
@@ -855,11 +1009,32 @@ docker stop pg-audit
 # Search patterns (use proper file search tools when available)
 # unsafe, unwrap, expect, panic, sql_query, format SQL, spawn, locks, NoTls, Command, URL fetchers
 
-# PostgreSQL query review when a DB is available
-EXPLAIN (ANALYZE, BUFFERS) <query>;
+# PostgreSQL query review when a DB is available (pseudo - substitute your real statement):
+# psql "$DATABASE_URL" -c 'EXPLAIN (ANALYZE, BUFFERS) SELECT ...;'
 ```
 
-Prefer Hermes `search_files` over shell grep/find, `read_file` over cat/head, and `patch` over sed/awk when using Hermes tools.
+For an `EXPLAIN` example as SQL (pseudo - replace the statement), run it through `psql`:
+
+```sql
+EXPLAIN (ANALYZE, BUFFERS) SELECT /* the hot query under review */ 1;
+```
+
+### Tool availability (record a blocker when a tool is missing)
+
+These tools are optional and often absent. If one is not installed, do NOT skip silently: note "TOOL not installed - <what it would have checked> not verified" in the report Methodology/Appendix, and either install it or fall back to manual review. Install (Rust tools are `cargo install`; others vary by platform):
+
+```bash
+cargo install cargo-audit cargo-deny cargo-vet cargo-geiger cargo-fuzz cargo-auditable cargo-cyclonedx
+rustup +nightly component add miri        # miri (UB interpreter); loom is a dev-dependency crate, not a CLI
+# trivy:   https://aquasecurity.github.io/trivy   (image/fs/config scan)
+# gitleaks:https://github.com/gitleaks/gitleaks   (secret scan of repo + history)
+# cosign:  https://github.com/sigstore/cosign     (sign/verify artifacts + attestations)
+# cyclonedx CLI (optional): https://github.com/CycloneDX/cyclonedx-cli  (SBOM convert/validate)
+```
+
+- `cargo-audit`/`cargo-deny`: advisories, bans, sources, licenses. `cargo-vet`: third-party review state. `cargo-geiger`: unsafe surface. `cargo-fuzz`+`miri`: see `references/rust-unsafe-fuzzing-tooling.md`. `loom`: model-check custom concurrency (added as a dev-dependency under `--cfg loom`, not a global CLI). `trivy`: container/IaC/fs scan (`references/cloud-container-iac-security.md`). `gitleaks`: secret scanning. `cosign`/`cyclonedx`: signing + SBOM (`references/supply-chain-ci-cd-security.md`).
+
+When this skill runs under Hermes, prefer Hermes-native operations in instructions: `search_files` over shell `grep`/`find`, `read_file` over `cat`/`head`/`tail`, and `patch` over `sed`/`awk`. Shell commands are appropriate for builds, tests, and security tools (cargo, docker, trivy, etc.).
 
 ## Captured Reference Notes
 
@@ -868,6 +1043,17 @@ Prefer Hermes `search_files` over shell grep/find, `read_file` over cat/head, an
 - See `references/web-crypto-hardening-rust.md` for Tower middleware ordering, CORS credentialed-reflection traps, security headers, inbound-webhook signature verification, constant-time crypto / key-entropy / rotation, and deserialization/resource-allocation attacks.
 - See `references/rust-backend-audit-patterns.md` for recurring high-value chains from real Rust/Axum/PostgreSQL audits: spoofable proxy headers plus unbounded rate-limit state, outbound HTTP without explicit timeouts, image decode/resize on Tokio workers, inconsistent TTL bounds, and the account-linking unique-email collision found only via dynamic verification.
 - See `references/ai-agent-audit-failure-patterns.md` for AI-agent failure patterns to hunt: context loss, lazy warning suppression, hallucinated docs, premature completion, tool misuse, and deterministic deployment requirements.
+
+Expansion packs (load by surface / external-coverage need):
+
+- See `references/appsec-framework-coverage.md` for how to map findings to OWASP ASVS 5.0 / API Top 10 2023 / WSTG, CWE, and CAPEC, plus the Coverage Matrix template.
+- See `references/rust-unsafe-fuzzing-tooling.md` for the deep unsafe-soundness + FFI checklist and the Miri / cargo-fuzz / sanitizer / Loom / cargo-vet/geiger/auditable + build-script/feature playbook.
+- See `references/supply-chain-ci-cd-security.md` for GitHub Actions hardening (`permissions:`, `pull_request_target`, action pinning, fork-PR secrets, OIDC), SBOM, SLSA, in-toto, provenance/signing, and dependency confusion.
+- See `references/cloud-container-iac-security.md` for Dockerfile/compose, Kubernetes Pod Security Standards, Terraform/IaC, cloud IAM/KMS, network exposure, and backup/restore.
+- See `references/cache-queues-graphql-grpc-security.md` for web cache poisoning/deception, Redis, queues/streams/replay/idempotency, GraphQL, and gRPC.
+- See `references/ai-agent-mcp-rag-security.md` for AI *runtime* security: prompt injection, unsafe output handling, excessive agency/tool abuse, MCP, RAG/vector ACLs, memory poisoning, GenAI telemetry/evals, and OWASP LLM Top 10 2025 / Agentic / ATLAS mapping.
+- See `references/detection-privacy-incident-response.md` for security logging, detection/alerting, incident response (NIST 800-61r3), and privacy/data-lifecycle (NIST Privacy Framework).
+- See `references/domain-email-security.md` for SPF/DKIM/DMARC/MTA-STS/DNSSEC/CAA posture, subdomain/dangling/custom-domain takeover, CDN origin leakage, host/forwarded-header trust, email reset/magic-link/invite abuse, inbound mail/webhook parsing, and email-flow rate limits.
 - Use `templates/DEPLOYMENT_GUIDELINES.md` when a backend root is missing `DEPLOYMENT_GUIDELINES.md`.
 
 ## High-Value Search Patterns
@@ -893,6 +1079,15 @@ Search for these concepts and inspect context manually:
 - Web/middleware/webhooks: `route_layer`, `.layer(`, `CorsLayer`, `allow_origin`, `allow_credentials`, `DefaultBodyLimit`, `catch_panic`, `TimeoutLayer`, `TraceLayer`, `X-Signature`, `X-Hub-Signature`, `Stripe-Signature`, `Bytes`.
 - Deserialization/resource: `deny_unknown_fields`, `serde(flatten)`, `with_capacity(`, `.repeat(`, `bincode`, `ciborium`, `rmp_serde`, `load_from_memory`, `to_rgba8`, `ZipArchive`, `tar::`.
 - Data lifecycle: `delete_account`, `purge`, `reaper`, `cleanup`, `export`, `unlink`, `audit_event`, `auth_event`.
+- Surface detection (route to modules): `.github/workflows/`, `Dockerfile`, `docker-compose`, `*.tf`, `Chart.yaml`, `k8s`, `deployment.yaml`, `tonic`, `async-graphql`, `juniper`, `lapin`, `rdkafka`, `deadpool-redis`, `fred`, `redis`, `mcp`, `rmcp`, `embedding`, `vector`, `qdrant`, `pgvector`.
+- Rust hard-mode tooling: `cargo fuzz`, `fuzz_target!`, `libfuzzer`, `afl`, `arbitrary`, `miri`, `-Zsanitizer`, `loom`, `cargo-vet`, `cargo geiger`, `cargo auditable`, `build.rs`, `proc_macro`, `proc-macro2`.
+- CI/CD & supply chain: `pull_request_target`, `permissions:`, `secrets.`, `actions/checkout`, `@v` (unpinned action), `id-token: write`, `[source.`, `replace-with`, `registry =`, `cosign`, `cyclonedx`, `sbom`, `slsa`, `attestation`.
+- Container/K8s/IaC: `privileged`, `hostNetwork`, `hostPID`, `hostPath`, `runAsRoot`, `allowPrivilegeEscalation`, `automountServiceAccountToken`, `securityContext`, `NetworkPolicy`, `0.0.0.0/0`, `Action: "*"`, `Resource: "*"`, `publicly_accessible`, `:latest`, `IMDSv1`, `169.254.169.254`.
+- Cache/CDN/queue: `Cache-Control`, `Vary`, `X-Forwarded-Host`, `X-Original-URL`, `surrogate`, `cdn`, `cache_key`, `SETEX`, `ttl`, `idempotency`, `dead_letter`, `dlq`, `replay`, `enqueue`, `consume`.
+- GraphQL/gRPC: `Schema::build`, `Query`, `Mutation`, `introspection`, `depth_limit`, `complexity`, `tonic::transport`, `Interceptor`, `tonic_reflection`, `max_decoding_message_size`, `Request<`.
+- AI runtime/MCP/RAG: `system_prompt`, `tool_call`, `function_call`, `tools:`, `mcp`, `list_tools`, `call_tool`, `retrieve`, `top_k`, `vector_store`, `memory`, `agent`, `max_tokens`, `budget`, `eval`.
+- Detection/logging: `tracing::`, `info!`/`warn!`/`error!` with user data, `redact`, `Authorization`, correlation IDs, `#[derive(Debug)]` near secrets, alert/anomaly/metric definitions.
+- Domain/DNS/email: `Host`, `X-Forwarded-Host`, `X-Forwarded-Proto`, `base_url`, `APP_URL`, `PUBLIC_URL`, `reset_url`, `magic_link`, `verify_url`, `confirmation_url`, `callback_url`, `returnTo`/`next=`, `custom_domain`, `verify_domain`, `cname`, `acme`/`http-01`, `spf`/`dkim`/`dmarc`/`_domainkey`, `send_email`/`lettre`/`sendgrid`/`ses`/`mailgun`/`smtp`, `invite`.
 
 ## Common Pitfalls
 
@@ -944,8 +1139,19 @@ Search for these concepts and inspect context manually:
 - [ ] Deserialization/resource-allocation limits reviewed.
 - [ ] Data lifecycle reviewed: deletion/export/erasure, unlink, session reaper, audit-event trail.
 - [ ] Dynamic verification run against a throwaway project-matching Postgres when feasible (migrations apply + gated integration green), or blocker stated.
-- [ ] AI/LLM surfaces reviewed if present.
+- [ ] Repository surfaces detected and matching modules activated (CI/CD, container/IaC, cache/queue, GraphQL/gRPC, AI runtime, domain/email).
+- [ ] External Coverage Pass done: findings mapped to CWE/OWASP/ASVS where applicable; Coverage Matrix filled with reviewed/gap/N-A.
+- [ ] Negative-space findings recorded (missing tests/limits/audit log/reaper/IR runbook/tool-permission model) with severity.
+- [ ] Fuzz/Miri/sanitizer/Loom evidence produced for unsafe/parser/FFI/crypto surfaces, or blocker stated.
+- [ ] CI/CD & supply chain reviewed if present: `permissions:`, `pull_request_target`, action pinning, fork-PR secrets, OIDC, SBOM/provenance.
+- [ ] Cloud/container/Kubernetes/IaC reviewed if present: PSS, non-root, network exposure, IAM/KMS, IMDSv2.
+- [ ] Cache/queue/GraphQL/gRPC reviewed if present: poisoning, idempotency/replay, depth/cost limits, per-RPC authz.
+- [ ] Business-logic abuse reviewed: unlimited creation/replay/state-skipping/denial-of-wallet/mass-assignment (OWASP API6).
+- [ ] Domain/DNS/email reviewed if present: SPF/DKIM/DMARC, takeover, host-header link integrity, email-flow rate limits.
+- [ ] AI/LLM surfaces reviewed if present: prompt injection, output handling, excessive agency/tools, MCP, RAG/vector ACLs, memory, evals.
+- [ ] Detection/IR/privacy reviewed: audit-event coverage, log redaction/injection, alerting, IR runbook/backups, deletion/export/unlink/reaper.
 - [ ] AI-agent failure artifacts reviewed even if the product has no AI feature.
 - [ ] Findings ranked by severity and confidence.
 - [ ] Each finding includes attacker chain and verification.
+- [ ] Report quality gates met: every Medium+ finding has code path/asset/preconditions/chain/severity/confidence/mapping/remediation/verification; every Critical/High passed a refutation pass; no unrun command/test claimed as passed.
 - [ ] Final report is detailed English markdown.

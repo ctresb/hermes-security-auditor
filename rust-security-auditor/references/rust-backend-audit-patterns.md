@@ -140,4 +140,4 @@ Fix direction:
 
 - State exact commands that were run and exact blockers for missing tools. Do not imply `cargo audit` or `cargo deny` ran when they were not installed.
 - Include the most dangerous combined chain in the executive summary, not just isolated findings.
-- Keep final user summary terse in Portuguese when working with this user; put the detailed artifact in English markdown.
+- Keep the chat-facing summary concise; put the detailed audit in the English markdown report. Match the project's or maintainer's preferred summary language when one is stated.
